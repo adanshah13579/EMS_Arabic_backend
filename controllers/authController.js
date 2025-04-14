@@ -97,6 +97,9 @@ exports.login = async (req, res) => {
         email: user.email,
         userType: user.userType,
         accountStatus:user.accountStatus,
+        location:user.location,
+        phoneNumber:user.phoneNumber,
+
         token: generateToken(user._id),
       });
     } else {

@@ -21,7 +21,7 @@ exports.getAllCategories = async (req, res) => {
 exports.getProvidersByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { longitude, latitude, page = 1, limit = 12 } = req.query;
+    const { longitude, latitude, page = 1, limit = 10 } = req.query;
 
     // Validate inputs
     const pageNumber = Math.max(1, parseInt(page));
