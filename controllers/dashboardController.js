@@ -16,6 +16,35 @@ exports.getAllCategories = async (req, res) => {
     });
   }
 };
+
+// @desc    Search categories by name (en or ar)
+// @route   GET /api/dashboard/categories/search?query=some-text
+exports.searchCategories = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ message: "Search query is required" });
+    }
+
+    const regex = new RegExp(query, "i"); // case-insensitive regex
+
+    const categories = await Category.find({
+      $or: [
+        { "name.en": { $regex: regex } },
+        { "name.ar": { $regex: regex } },
+      ],
+    }).select("-createdAt -updatedAt -__v");
+
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({
+      message: "Server error during category search",
+      error: error.message,
+    });
+  }
+};
+
 // @desc    Get service providers by category with location-based sorting
 // @route   GET /api/categories/:categoryId/providers
 exports.getProvidersByCategory = async (req, res) => {
@@ -36,7 +65,6 @@ exports.getProvidersByCategory = async (req, res) => {
 
     const coordinates = [parseFloat(latitude), parseFloat(longitude)];
 
-    // Aggregation pipeline using `$geoNear`
     const pipeline = [
       {
         $geoNear: {
@@ -78,7 +106,6 @@ exports.getProvidersByCategory = async (req, res) => {
 
     const providers = await User.aggregate(pipeline);
 
-    // Get total count of service providers in the category
     const totalProviders = await User.countDocuments({
       userType: "serviceProvider",
       category: new mongoose.Types.ObjectId(categoryId),
