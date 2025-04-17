@@ -3,15 +3,29 @@ const mongoose = require("mongoose");
 const CategorySchema = new mongoose.Schema(
   {
     name: {
-      type: String,
-      required: [true, "Category name is required"],
-      unique: true,
-      trim: true,
-      lowercase: true,
+      en: {
+        type: String,
+        required: [true, "English category name is required"],
+        unique: true,
+        trim: true,
+        lowercase: true,
+      },
+      ar: {
+        type: String,
+        required: [true, "Arabic category name is required"],
+        trim: true,
+        lowercase: true,
+      },
     },
     description: {
-      type: String,
-      trim: true,
+      en: {
+        type: String,
+        trim: true,
+      },
+      ar: {
+        type: String,
+        trim: true,
+      },
     },
     isDefault: {
       type: Boolean,

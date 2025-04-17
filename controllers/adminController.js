@@ -6,37 +6,54 @@ const mongoose = require("mongoose");
 // @route   POST /api/admin/categories
 exports.createCategory = async (req, res) => {
   try {
+    // Destructure both the English and Arabic fields for name and description
     const { name, description, image } = req.body;
 
-    console.log("req",req.body);
-    
+    // Ensure that both English and Arabic fields are provided for name and description
+    if (!name.en || !name.ar || !description.en || !description.ar) {
+      return res.status(400).json({
+        message: "Both English and Arabic name and description are required",
+      });
+    }
 
-    // Check if category already exists
+    // Check if category already exists (you can check using either en or ar or both, depending on your use case)
     const existingCategory = await Category.findOne({
-      name: name.toLowerCase().trim(),
+      $or: [
+        { "name.en": name.en.toLowerCase().trim() },
+        { "name.ar": name.ar.toLowerCase().trim() },
+      ],
     });
 
     if (existingCategory) {
       return res.status(400).json({
-        message: "Category with same name already exists",
+        message: "Category with the same name already exists",
       });
     }
 
-    // Create new category
+    // Create new category with both English and Arabic names and descriptions
     const category = await Category.create({
-      name: name.toLowerCase().trim(),
-      description,
-      icon:image,
+      name: {
+        en: name.en.toLowerCase().trim(),
+        ar: name.ar.toLowerCase().trim(),
+      },
+      description: {
+        en: description.en.trim(),
+        ar: description.ar.trim(),
+      },
+      icon: image,  // Assuming this is the icon URL
     });
 
+    // Return the newly created category
     res.status(201).json(category);
   } catch (error) {
+    console.error("Error creating category:", error);
     res.status(500).json({
       message: "Server error creating category",
       error: error.message,
     });
   }
 };
+
 
 // @desc    Update a category
 // @route   PUT /api/admin/categories/:id
@@ -133,7 +150,7 @@ exports.deleteCategory = async (req, res) => {
 //Get all users with account status and userType
 exports.getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 12, accountStatus, userType } = req.query;
+    const { page = 1, limit , accountStatus, userType } = req.query;
 
     const pageNumber = Math.max(1, parseInt(page));
     const pageSize = Math.max(1, parseInt(limit));
@@ -144,7 +161,7 @@ exports.getAllUsers = async (req, res) => {
 
     // Correct the typo in `accountStatus`
     if (accountStatus) {
-      filter.accountStatus = accountStatus; // ✅ Fixed typo
+      filter.accountStatus = accountStatus; 
     }
 
     // Only apply userType filter if provided & valid
@@ -155,6 +172,8 @@ exports.getAllUsers = async (req, res) => {
     const totalUsers = await User.countDocuments(filter);
     const users = await User.find(filter)
       .select("-password -__v")
+      .populate("category", "name") 
+
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize);
