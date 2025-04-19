@@ -2,11 +2,9 @@ const Category = require("../models/Category");
 const User = require("../models/User");
 const mongoose = require("mongoose");
 
-// @desc    Create a new category
-// @route   POST /api/admin/categories
+
 exports.createCategory = async (req, res) => {
   try {
-    // Destructure both the English and Arabic fields for name and description
     const { name, description, image } = req.body;
 
     // Ensure that both English and Arabic fields are provided for name and description

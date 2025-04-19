@@ -85,10 +85,10 @@ console.log("Category:", category);
 // @route   POST /api/auth/login
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phoneNumber, password } = req.body;
 
     // Check for user
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ phoneNumber });
 
     if (user && (await bcrypt.compare(password, user.password))) {
       res.json({
@@ -112,6 +112,40 @@ exports.login = async (req, res) => {
     });
   }
 };
+
+
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { phoneNumber, newPassword } = req.body;
+    console.log(req.body);
+    
+
+    if (!phoneNumber || !newPassword) {
+      return res.status(400).json({ message: "Email and new password are required." });
+    }
+
+    const user = await User.findOne({ phoneNumber });
+
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found with this email." });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+
+    await user.save();
+
+    res.json({ message: "Password reset successful. Please log in with your new password." });
+  } catch (error) {
+    res.status(500).json({
+      message: "Server error during password reset",
+      error: error.message,
+    });
+  }
+};
+
 exports.getCurrentUser = async (req, res) => {
   try {
     // req.user is set by the protect middleware

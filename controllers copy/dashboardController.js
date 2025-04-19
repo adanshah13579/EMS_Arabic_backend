@@ -16,9 +16,6 @@ exports.getAllCategories = async (req, res) => {
     });
   }
 };
-
-// @desc    Search categories by name (en or ar)
-// @route   GET /api/dashboard/categories/search?query=some-text
 exports.searchCategories = async (req, res) => {
   try {
     const { query } = req.query;
@@ -27,7 +24,7 @@ exports.searchCategories = async (req, res) => {
       return res.status(400).json({ message: "Search query is required" });
     }
 
-    const regex = new RegExp(query, "i"); // case-insensitive regex
+    const regex = new RegExp(query, "i"); 
 
     const categories = await Category.find({
       $or: [
@@ -50,7 +47,7 @@ exports.searchCategories = async (req, res) => {
 exports.getProvidersByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { longitude, latitude, page = 1, limit = 10 } = req.query;
+    const { latitude,longitude,  page = 1, limit = 10 } = req.query;
 
     // Validate inputs
     const pageNumber = Math.max(1, parseInt(page));
