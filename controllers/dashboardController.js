@@ -5,9 +5,10 @@ const mongoose = require("mongoose");
 // @route   GET /api/dashboard/categories
 exports.getAllCategories = async (req, res) => {
   try {
-    const categories = await Category.find({})
+    const categories = await Category.find({ isDefault: { $ne: true } }) // Exclude isDefault: true
       .select("-createdAt -updatedAt -__v")
       .sort({ name: 1 });
+
     res.json(categories);
   } catch (error) {
     res.status(500).json({
