@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 
 exports.createCategory = async (req, res) => {
   try {
-    const { name, description, image } = req.body;
+    const { name, description, icon } = req.body;
 
     // Ensure that both English and Arabic fields are provided for name and description
     if (!name.en || !name.ar || !description.en || !description.ar) {
@@ -38,7 +38,7 @@ exports.createCategory = async (req, res) => {
         en: description.en.trim(),
         ar: description.ar.trim(),
       },
-      icon: image,  // Assuming this is the icon URL
+      icon: icon,  // Assuming this is the icon URL
     });
 
     // Return the newly created category
