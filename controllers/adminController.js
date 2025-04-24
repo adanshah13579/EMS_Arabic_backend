@@ -276,67 +276,169 @@ const restructureData = (data, period) => {
 // Function to get user growth
 exports.getUserGrowth = async (req, res) => {
   try {
-    // Aggregation pipeline to get user growth by month
-    const userGrowthByMonth = await User.aggregate([
-      { $match: { userType: { $ne: "admin" } } },
+    const matchStage = { isAdmin: false };
+
+    // Role projection for identifying whether the user is a provider, client, or both
+    const roleProjection = {
+      $switch: {
+        branches: [
+          {
+            case: { $eq: ["$isProvider", true] },
+            then: "provider",
+          },
+          {
+            case: { $eq: ["$isClient", true] },
+            then: "client",
+          },
+          {
+            case: { $and: [{ $eq: ["$isProvider", true] }, { $eq: ["$isClient", true] }] },
+            then: "both",
+          },
+        ],
+        default: "unknown",
+      },
+    };
+
+    // Aggregation for daily user registrations
+    const userGrowthByDay = await User.aggregate([
+      { $match: matchStage },
       {
-        $group: {
-          _id: { month: { $month: "$createdAt" }, userType: "$userType" }, 
-          count: { $sum: 1 },
+        $project: {
+          day: { $dayOfYear: "$createdAt" }, // Extract day of the year
+          role: roleProjection,
         },
       },
-      { $sort: { "_id.month": 1 } }, // Sort by month
-    ]);
-
-    // Aggregation pipeline to get user growth by week
-    const userGrowthByWeek = await User.aggregate([
-      { $match: { userType: { $ne: "admin" } } },
       {
         $group: {
-          _id: { week: { $isoWeek: "$createdAt" }, userType: "$userType" }, 
+          _id: { day: "$day", role: "$role" }, // Group by day and role
+          count: { $sum: 1 }, // Count the number of registrations for each role
+        },
+      },
+      { $sort: { "_id.day": 1 } }, // Sort by day
+    ]);
+
+    // Aggregation for weekly user registrations
+    const userGrowthByWeek = await User.aggregate([
+      { $match: matchStage },
+      {
+        $project: {
+          week: { $isoWeek: "$createdAt" }, // Extract ISO week number
+          role: roleProjection,
+        },
+      },
+      {
+        $group: {
+          _id: { week: "$week", role: "$role" },
           count: { $sum: 1 },
         },
       },
       { $sort: { "_id.week": 1 } }, // Sort by week
     ]);
 
-    // Restructure the data for better usability
-    const structuredGrowthByMonth = restructureData(userGrowthByMonth, "month");
-    const structuredGrowthByWeek = restructureData(userGrowthByWeek, "week");
+    // Aggregation for monthly user registrations
+    const userGrowthByMonth = await User.aggregate([
+      { $match: matchStage },
+      {
+        $project: {
+          month: { $month: "$createdAt" }, // Extract month
+          role: roleProjection,
+        },
+      },
+      {
+        $group: {
+          _id: { month: "$month", role: "$role" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.month": 1 } }, // Sort by month
+    ]);
 
-    // Return the user growth data
+    // Helper function to restructure data for consistent format
+    const restructureData = (data, timeUnit) => {
+      const result = data.reduce((acc, item) => {
+        const timeUnitValue = item._id[timeUnit];
+        if (!acc[timeUnitValue]) {
+          acc[timeUnitValue] = { client: 0, provider: 0, both: 0 };
+        }
+        acc[timeUnitValue][item._id.role] += item.count;
+        return acc;
+      }, {});
+      return result;
+    };
+
+    // Restructure the data for easy response formatting
+    const structuredGrowthByDay = restructureData(userGrowthByDay, "day");
+    const structuredGrowthByWeek = restructureData(userGrowthByWeek, "week");
+    const structuredGrowthByMonth = restructureData(userGrowthByMonth, "month");
+
     res.json({
       success: true,
       data: {
-        userGrowthByMonth: structuredGrowthByMonth,
+        userGrowthByDay: structuredGrowthByDay,
         userGrowthByWeek: structuredGrowthByWeek,
+        userGrowthByMonth: structuredGrowthByMonth,
       },
     });
   } catch (error) {
+    console.error("Error in getUserGrowth:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 
 
 // 2️⃣ User Distribution by Account Type 🔍 (Excludes Admin)
 exports.getUserDistribution = async (req, res) => {
   try {
+    const { client, provider } = req.query;
+
+    let matchQuery = {
+      userType: { $ne: "admin" }, // Exclude admin if you have userType
+    };
+
+    // Adjust match query based on query parameters
+    if (client === "true" && provider !== "true") {
+      matchQuery.isClient = true;
+    } else if (provider === "true" && client !== "true") {
+      matchQuery.isProvider = true;
+    } else if (provider !== "true" && client !== "true") {
+      return res.status(400).json({ success: false, message: "At least one of 'client' or 'provider' must be true." });
+    }
+
     const userDistribution = await User.aggregate([
-      { $match: { userType: { $ne: "admin" } } },
+      { $match: matchQuery },
       {
         $group: {
-          _id: "$userType",
+          _id: {
+            isClient: "$isClient",
+            isProvider: "$isProvider",
+          },
           count: { $sum: 1 },
         },
       },
     ]);
 
-    res.json({ success: true, data: userDistribution });
+    // Optional: format response clearly
+    const result = {
+      clientOnly: 0,
+      providerOnly: 0,
+      both: 0,
+    };
+
+    userDistribution.forEach((entry) => {
+      const { isClient, isProvider } = entry._id;
+      if (isClient && isProvider) result.both += entry.count;
+      else if (isClient) result.clientOnly += entry.count;
+      else if (isProvider) result.providerOnly += entry.count;
+    });
+
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // 3️⃣ Active vs Suspended Users ⚖ (Excludes Admin)
 exports.getUserStatusStats = async (req, res) => {
@@ -361,36 +463,56 @@ exports.getUserStatusStats = async (req, res) => {
 exports.getUsersByCategory = async (req, res) => {
   try {
     const categoryStats = await User.aggregate([
-      { $match: { userType: "serviceProvider" } },
+      { $match: { isProvider: true } }, // Matching only service providers
+      {
+        $unwind: "$category", // Unwind the category array to group each provider's category individually
+      },
       {
         $group: {
-          _id: "$category",
-          count: { $sum: 1 },
+          _id: "$category", // Group by category ID
+          count: { $sum: 1 }, // Count the number of providers per category
         },
       },
       {
         $lookup: {
-          from: "categories", // Collection name in MongoDB
-          localField: "_id",
-          foreignField: "_id",
+          from: "categories", // Join with the categories collection
+          localField: "_id", // Match with category ObjectId
+          foreignField: "_id", // Match with category ObjectId
           as: "categoryDetails",
         },
       },
       {
-        $unwind: "$categoryDetails",
+        $unwind: "$categoryDetails", // Unwind the category details
       },
       {
         $project: {
           _id: 0,
-          categoryId: "$_id",
-          categoryName: "$categoryDetails.name",
-          count: 1,
+          categoryId: "$_id", // Return category ID
+          categoryName: {
+            en: "$categoryDetails.name.en", // English category name
+            ar: "$categoryDetails.name.ar", // Arabic category name
+          },
+          count: 1, // Return the count of providers
         },
       },
     ]);
 
-    res.json({ success: true, data: categoryStats });
+    // Remove duplicate categories and aggregate counts in a single array
+    const uniqueCategoryStats = categoryStats.reduce((acc, category) => {
+      const existingCategory = acc.find(
+        (cat) => cat.categoryId.toString() === category.categoryId.toString()
+      );
+      if (existingCategory) {
+        existingCategory.count += category.count; // Increment count for existing category
+      } else {
+        acc.push(category); // Add new category
+      }
+      return acc;
+    }, []);
+
+    res.json({ success: true, data: uniqueCategoryStats });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
