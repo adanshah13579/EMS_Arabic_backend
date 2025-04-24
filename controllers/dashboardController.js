@@ -48,7 +48,7 @@ exports.searchCategories = async (req, res) => {
 exports.getProvidersByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const { latitude,longitude,  page = 1, limit = 10 } = req.query;
+    const { latitude, longitude, page = 1, limit = 10 } = req.query;
 
     // Validate inputs
     const pageNumber = Math.max(1, parseInt(page));
@@ -71,8 +71,8 @@ exports.getProvidersByCategory = async (req, res) => {
           spherical: true,
           distanceMultiplier: 0.001, // Convert meters to KM
           query: {
-            userType: "serviceProvider",
-            category: new mongoose.Types.ObjectId(categoryId),
+            isProvider: true,
+            category: { $in: [new mongoose.Types.ObjectId(categoryId)] },
           },
         },
       },
@@ -92,7 +92,6 @@ exports.getProvidersByCategory = async (req, res) => {
         $project: {
           password: 0,
           updatedAt: 0,
-          userType: 0,
           rank: 0,
           __v: 0,
           "category.createdAt": 0,
@@ -102,15 +101,26 @@ exports.getProvidersByCategory = async (req, res) => {
       },
     ];
 
-    const providers = await User.aggregate(pipeline);
+    let providers = await User.aggregate(pipeline);
+
+    // Remove duplicate providers
+    const uniqueProviders = [];
+    const seenIds = new Set();
+
+    for (const provider of providers) {
+      if (!seenIds.has(provider._id.toString())) {
+        seenIds.add(provider._id.toString());
+        uniqueProviders.push(provider);
+      }
+    }
 
     const totalProviders = await User.countDocuments({
-      userType: "serviceProvider",
-      category: new mongoose.Types.ObjectId(categoryId),
+      isProvider: true,
+      category: { $in: [new mongoose.Types.ObjectId(categoryId)] },
     });
 
     res.json({
-      providers,
+      providers: uniqueProviders,
       currentPage: pageNumber,
       totalPages: Math.ceil(totalProviders / pageSize),
       totalProviders,

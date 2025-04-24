@@ -19,7 +19,8 @@ const router = express.Router();
 
 // Middleware to ensure only admin can access these routes
 const adminOnly = (req, res, next) => {
-  if (req.user.userType !== "admin") {
+  if (!req.user.isAdmin) {
+    // console.log(req.user)
     return res.status(403).json({ message: "Not authorized as admin" });
   }
   next();
