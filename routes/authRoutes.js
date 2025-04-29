@@ -17,7 +17,7 @@ const router = express.Router();
 
 // @route   POST /api/auth/signup
 router.post("/signup", signup);
-router.post("/submitVerification", submitVerification);
+router.post("/submitVerification", protect, submitVerification);
 
 // @route   POST /api/auth/login
 router.post("/login", login);

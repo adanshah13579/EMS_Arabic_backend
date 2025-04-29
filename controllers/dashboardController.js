@@ -89,6 +89,26 @@ exports.getProvidersByCategory = async (req, res) => {
       },
       { $unwind: "$category" },
       {
+        $lookup: {
+          from: "reviews",
+          localField: "_id",
+          foreignField: "receiver",
+          as: "reviews",
+        },
+      },
+      {
+        $addFields: {
+          averageRating: {
+            $cond: {
+              if: { $gt: [{ $size: "$reviews" }, 0] },
+              then: { $avg: "$reviews.stars" },
+              else: 0
+            }
+          },
+          totalReviews: { $size: "$reviews" }
+        }
+      },
+      {
         $project: {
           password: 0,
           updatedAt: 0,
@@ -97,6 +117,7 @@ exports.getProvidersByCategory = async (req, res) => {
           "category.createdAt": 0,
           "category.updatedAt": 0,
           "category.__v": 0,
+          reviews: 0
         },
       },
     ];

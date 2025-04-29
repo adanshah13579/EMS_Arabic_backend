@@ -1,6 +1,7 @@
 const Category = require("../models/Category");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const Message = require("../models/Message");
 
 
 exports.createCategory = async (req, res) => {
@@ -95,26 +96,24 @@ exports.deleteCategory = async (req, res) => {
 
     // Find the category
     const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
 
     // Prevent deleting default category
     if (category.isDefault) {
-      return res.status(400).json({
-        message: "Cannot delete default category",
-      });
+      return res.status(400).json({ message: "Cannot delete default category" });
     }
 
-    // Find the N/A category
-    const naCategory = await Category.findOne({
-      name: "n/a",
-      isDefault: true,
-    });
+    // Find the N/A category by 'name.en'
+    let naCategory = await Category.findOne({ "name.en": "n/a", isDefault: true });
 
     // If N/A category doesn't exist, create it
     let naCategoryId = naCategory?._id;
     if (!naCategoryId) {
       const newNaCategory = await Category.create({
-        name: "n/a",
-        description: "Unassigned Category",
+        name: { en: "n/a", ar: "غير محدد" },
+        description: { en: "Unassigned Category", ar: "فئة غير محددة" },
         isDefault: true,
       });
       naCategoryId = newNaCategory._id;
@@ -137,7 +136,6 @@ exports.deleteCategory = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-
     res.status(500).json({
       message: "Server error deleting category",
       error: error.message,
@@ -145,10 +143,11 @@ exports.deleteCategory = async (req, res) => {
   }
 };
 
+
 //Get all users with account status and userType
 exports.getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit , accountStatus, userType } = req.query;
+    const { page = 1, limit, accountStatus, userType } = req.query;
 
     const pageNumber = Math.max(1, parseInt(page));
     const pageSize = Math.max(1, parseInt(limit));
@@ -159,7 +158,7 @@ exports.getAllUsers = async (req, res) => {
 
     // Correct the typo in `accountStatus`
     if (accountStatus) {
-      filter.accountStatus = accountStatus; 
+      filter.accountStatus = accountStatus;
     }
 
     // Only apply userType filter if provided & valid
@@ -170,14 +169,64 @@ exports.getAllUsers = async (req, res) => {
     const totalUsers = await User.countDocuments(filter);
     const users = await User.find(filter)
       .select("-password -__v")
-      .populate("category", "name") 
-
+      .populate("category", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageSize);
 
+    // Get job offer counts for each provider
+    const jobOfferCounts = await Message.aggregate([
+      {
+        $match: {
+          messageType: 'job_offer',
+          recipient: { $in: users.map(user => user._id) }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            recipient: "$recipient",
+            status: "$jobOfferStatus"
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create a map of user IDs to their job offer counts
+    const jobOfferMap = {};
+    jobOfferCounts.forEach(offer => {
+      const userId = offer._id.recipient.toString();
+      if (!jobOfferMap[userId]) {
+        jobOfferMap[userId] = {
+          pendingJobOffers: 0,
+          acceptedJobOffers: 0,
+          completedJobOffers:0
+        };
+      }
+      if (offer._id.status === 'pending') {
+        jobOfferMap[userId].pendingJobOffers = offer.count;
+      } else if (offer._id.status === 'accepted') {
+        jobOfferMap[userId].acceptedJobOffers = offer.count;
+      } else if (offer._id.status === 'completed') {
+        jobOfferMap[userId].completedJobOffers = offer.count;
+      }
+    });
+
+    // Add job offer counts to each user
+    const usersWithJobOffers = users.map(user => {
+      const userId = user._id.toString();
+      return {
+        ...user.toObject(),
+        jobOffers: jobOfferMap[userId] || {
+          pendingJobOffers: 0,
+          acceptedJobOffers: 0
+        }
+      };
+    });
+
     res.json({
-      users,
+      users: usersWithJobOffers,
       currentPage: pageNumber,
       totalPages: Math.ceil(totalUsers / pageSize),
       totalUsers,
@@ -194,7 +243,7 @@ exports.getUserById = async (req, res) => {
     const { id } = req.params;
 
     // Find user by ID and exclude password
-    const user = await User.findById(id).select("-password -__v");
+    const user = await User.findById(id).select("-password -__v").populate("category");
 
     // If user not found, return 404
     if (!user) {

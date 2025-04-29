@@ -113,6 +113,11 @@ const UserSchema = new mongoose.Schema(
       min: [0, "Hourly rate cannot be negative"],
       default: 0,
     },
+    accountNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     googleId: {
       type: String,
       unique: true,

@@ -150,7 +150,8 @@ exports.getCurrentUser = async (req, res) => {
 
 exports.submitVerification = async (req, res) => {
   try {
-    const { userId, images } = req.body;  // Get userId and images from the request body
+    const { _id: userId } = req.user;
+    const {  images } = req.body;  // Get userId and images from the request body
     
     if (!images || images.length < 3) {
       return res.status(400).json({ message: "Please upload at least 3 images." });
@@ -222,7 +223,7 @@ exports.toggleOnlineStatus = async (req, res) => {
 exports.createProviderProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { category, location, hourlyRate, bio, profilePicUrl } = req.body;
+    const { category, location, hourlyRate, bio, profilePicUrl, accountNumber } = req.body;
 
     // Find the user
     const user = await User.findById(userId);
@@ -261,6 +262,7 @@ exports.createProviderProfile = async (req, res) => {
       streetAddress: location.streetAddress,
     };
     user.hourlyRate = hourlyRate || 0;
+    user.accountNumber = accountNumber || "";
     
     // Update optional fields if provided
     if (bio) user.bio = bio;
@@ -469,6 +471,74 @@ exports.updateProfile = async (req, res) => {
     console.error("Error updating profile:", error);
     res.status(500).json({
       message: "Server error while updating profile",
+      error: error.message
+    });
+  }
+};
+
+exports.updateProviderProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { category, location, hourlyRate, bio, profilePicUrl, accountNumber } = req.body;
+
+    // Find the user
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if user is a provider
+    if (!user.isProvider) {
+      return res.status(400).json({ 
+        message: "User is not a provider" 
+      });
+    }
+
+    // Update fields if provided
+    if (category && Array.isArray(category) && category.length > 0) {
+      user.category = category;
+    }
+
+    if (location) {
+      if (location.coordinates) {
+        user.location.coordinates = location.coordinates;
+      }
+      if (location.streetAddress) {
+        user.location.streetAddress = location.streetAddress;
+      }
+    }
+
+    if (hourlyRate !== undefined) {
+      user.hourlyRate = hourlyRate;
+    }
+
+    if (bio !== undefined) {
+      user.bio = bio;
+    }
+
+    if (profilePicUrl !== undefined) {
+      user.profilePicUrl = profilePicUrl;
+    }
+
+    if (accountNumber !== undefined) {
+      user.accountNumber = accountNumber;
+    }
+
+    await user.save();
+
+    // Get the updated user without sensitive fields
+    const updatedUser = await User.findById(userId)
+      .select("-password -__v");
+
+    res.status(200).json({
+      message: "Provider profile updated successfully",
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error("Error updating provider profile:", error);
+    res.status(500).json({
+      message: "Server error while updating provider profile",
       error: error.message
     });
   }

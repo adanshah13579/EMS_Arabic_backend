@@ -22,18 +22,18 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: "User not found" });
       }
 
-      // Check if the account is suspended
-      if (
-        user.accountStatus === "suspended" ||
-        user.accountStatus === "deleted"
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Account suspended. Access denied. Please contact with system administrator to resolve your issue.",
-          });
-      }
+      // // Check if the account is suspended
+      // if (
+      //   user.accountStatus === "suspended" ||
+      //   user.accountStatus === "deleted"
+      // ) {
+      //   return res
+      //     .status(403)
+      //     .json({
+      //       message:
+      //         "Account suspended. Access denied. Please contact with system administrator to resolve your issue.",
+      //     });
+      // }
 
       req.user = user; // Attach user to request
       next();
